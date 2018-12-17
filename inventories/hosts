@@ -1,0 +1,9 @@
+localhost   ansible_connection=local
+
+[demo:children]
+demo-lb
+demo-web
+
+[demo-lb]
+
+[demo-web]

@@ -1,0 +1,37 @@
+---
+- hosts: all
+  user: "{{ admin_user }}"
+  vars:
+    exec_group: "demo-lb"
+  tasks:
+    - name: extract backend servers in a variable
+      set_fact:
+        backend_servers: "{{ backend_servers | default([]) + [{'name': hostvars[item].ansible_hostname, 'address': item + ':80'}] }}"
+      loop: "{{ groups['demo-web'] }}"
+      when: exec_group in group_names
+
+- hosts: demo-lb
+  user: "{{ admin_user }}"
+  become: true
+  roles:
+    - role: geerlingguy.haproxy
+      haproxy_backend_servers: "{{ backend_servers }}"
+
+- hosts: demo-web
+  user: "{{ admin_user }}"
+  become: true
+  roles:
+    - role: geerlingguy.nginx
+      nginx_remove_default_vhost: true
+      nginx_vhosts:
+        - listen: "80"
+          server_name: "{{ inventory_hostname }} localhost"
+          root: "/var/www/html"
+          index: "index.html index.htm"
+          state: "present"
+          filename: "helloworld.conf"
+          extra_parameters: |
+            location / {
+              add_header Content-Type text/plain;
+              return 200 "{{ inventory_hostname }}";
+            }

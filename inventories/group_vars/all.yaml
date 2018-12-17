@@ -1,0 +1,5 @@
+---
+admin_user: admin
+deploy_user: deploy
+
+admin_group: demo-sudoers

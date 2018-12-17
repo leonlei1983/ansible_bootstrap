@@ -1,0 +1,40 @@
+---
+- group:
+    name: "{{ admin_group }}"
+    state: present
+
+- user:
+    name: "{{ admin_user }}"
+    groups: "{{ admin_group }}"
+    shell: /bin/bash
+    append: true
+
+- user:
+    name: "{{ deploy_user }}"
+    groups: www-data
+    shell: /bin/bash
+    append: true
+
+- name: create .ssh directory
+  file:
+    path: "/home/{{ item }}/.ssh"
+    state: directory
+    mode: 0700
+    owner: "{{ item }}"
+    group: "{{ item }}"
+  loop:
+    - "{{ admin_user }}"
+    - "{{ deploy_user }}"
+
+- copy:
+    src: "{{ playbook_dir | dirname }}/.secret/authorized_keys"
+    dest: "/home/{{ item }}/.ssh/authorized_keys"
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: 0600
+  loop:
+    - "{{ admin_user }}"
+    - "{{ deploy_user }}"
+
+- hostname:
+    name: "{{ linode_name }}"

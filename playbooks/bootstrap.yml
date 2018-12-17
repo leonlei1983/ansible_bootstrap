@@ -1,0 +1,85 @@
+---
+- name: Create a Linode server
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir | dirname }}/.secret/linode-credential.yml"
+    - "{{ playbook_dir | dirname }}/.secret/linode-creation.yml"
+  tasks:
+    - name: get linode server information via Linode API
+      delegate_to: localhost
+      when: linode_id is defined
+      linode:
+        api_key: "{{ linode_api_key }}"
+        linode_id: "{{ linode_id }}"
+        name: "{{ linode_name }}"
+        wait: yes
+        wait_timeout: 600
+        state: present
+      register: linode_exec_result
+
+    - set_fact:
+         linode_server_info: "{{ linode_exec_result.instance }}"
+      when: linode_exec_result.instance is defined
+
+    - name: create linode server via Linode API
+      delegate_to: localhost
+      when: linode_id is undefined
+      linode:
+        api_key: "{{ linode_api_key }}"
+        name: "{{ linode_name }}"
+        password: "{{ linode_password }}"
+        plan: "{{ linode_plan }}"
+        datacenter: "{{ linode_datacenter }}"
+        distribution: "{{ linode_distribution }}"
+        ssh_pub_key: "{{ root_ssh_pub_key }}"
+        swap: "{{ linode_swap }}"
+        private_ip: yes
+        wait: yes
+        wait_timeout: 600
+        state: present
+      register: linode_exec_result
+
+    - set_fact:
+         linode_server_info: "{{ linode_exec_result.instance }}"
+      when: linode_exec_result.instance is defined
+
+    - name: append password in linode server information
+      set_fact:
+        linode_server_info: "{{ linode_server_info | combine({ 'password': linode_password }) }}"
+
+    - name: display the linode server information
+      debug:
+        msg: "{{ linode_server_info }}"
+
+    - pause:
+        prompt: "Please confirm the information and store in 1password\npress any key to continue ..."
+
+    - name: Add new host to in-memory inventory
+      add_host:
+        hostname: "{{ linode_server_info.ipv4 }}"
+        groupname: "linode_servers"
+
+    - name: Wait for Linode to listen on port 22
+      wait_for:
+        state: started
+        host: "{{ linode_server_info.ipv4 }}"
+        port: 22
+
+- name: Common configuration on the new server
+  hosts: linode_servers
+  user: root
+  vars_files:
+    - "{{ playbook_dir | dirname }}/.secret/linode-creation.yml"
+  roles:
+    - role: server_setup
+    - role: arillso.sudoers
+      sudoers_sudoers_d_files:
+        "{{ admin_group }}":
+          privileges:
+            - name: "%{{ admin_group }}"
+              entry: "ALL=(ALL) NOPASSWD:ALL"
+    - role: geerlingguy.firewall
+      firewall_allowed_tcp_ports:
+        - "22"
+        - "80"
